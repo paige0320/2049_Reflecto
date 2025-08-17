@@ -81,10 +81,13 @@
   </section>
 
   <div class="floating">
-    <button class="btn" onclick="speakToday()">🔊 語音播報</button>
-    <button class="btn" onclick="flipCam()">🔁 切換鏡頭</button>
-    <button class="btn" onclick="switchTorch()">🔦 輔助燈</button>
+  <button class="btn" onclick="speakToday()">🔊 語音播報</button>
+  <button class="btn" onclick="flipCam()">🔁 切換鏡頭</button>
+  <button class="btn" onclick="toggleMusic()">🎵 播音樂</button>
   </div>
+
+    <!-- 加入隱藏的 audio 播放器 -->
+    <audio id="bgMusic" src="music/sample.mp3" loop></audio>
 
   <script>
     // 時間
@@ -197,6 +200,15 @@
   if ('speechSynthesis' in window) {
     speechSynthesis.onvoiceschanged = () => { pickZhTWVoice(); };
   }
+
+  function toggleMusic(){
+  const audio = document.getElementById('bgMusic');
+  if(audio.paused){
+    audio.play().catch(e => alert('無法播放音樂：' + e.message));
+  } else {
+    audio.pause();
+  }
+    }
   </script>
   
 </body>
