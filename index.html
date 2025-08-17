@@ -88,7 +88,6 @@
       <option value="international">國際</option>
       <option value="tech">科技</option>
       <option value="sports">體育</option>
-      <option value="taiwan">台灣</option>
     </select>
     <button class="btn" id="newsBtn" onclick="toggleNews()">📰 播報新聞</button>
     <button class="btn" id="musicBtn" onclick="toggleMusic()">🎵 播音樂</button>
@@ -233,18 +232,13 @@
       market: '台股 OR 股市 OR 台灣 重大 新聞',
       international: '國際新聞 OR 國際 要聞',
       tech: '科技 OR 科技新聞 OR 半導體',
-      sports: '體育 OR 體育新聞 OR 體育賽事',
-      taiwan: '台灣 要聞 OR 焦點新聞'
+      sports: '體育 OR 體育新聞 OR 體育賽事'
     };
     function getSelectedCategory(){
       const sel = document.getElementById('newsCategory');
       return sel?.value || 'market';
     }
-    (function restoreCategory(){
-      const sel = document.getElementById('newsCategory');
-      if (!sel) return;
-      const saved = localStorage.getItem('newsCategory') || 'market';
-      sel.value = saved;
+    (function restoreCategory(){ const sel = document.getElementById('newsCategory'); if (!sel) return; const allowed = new Set(['market','international','tech','sports']); const saved = localStorage.getItem('newsCategory') || 'market'; sel.value = allowed.has(saved) ? saved : 'market';
       sel.addEventListener('change', () => {
         localStorage.setItem('newsCategory', sel.value);
       });
