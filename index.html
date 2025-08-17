@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Eterna Mirror · 單張早安圖（JS 陣列，不用 fetch）</title>
+<title>Eterna Mirror · 早安＋新聞播報</title>
 <style>
   html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; color:#fff;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Noto Sans","PingFang TC","Microsoft JhengHei",sans-serif; }
@@ -82,15 +82,15 @@
 
   <div class="floating">
     <button class="btn" id="speakBtn" onclick="toggleSpeak()">🔊 語音播報</button>
-    <button class="btn" onclick="flipCam()">🔁 切換鏡頭</button>
+    <button class="btn" id="newsBtn" onclick="toggleNews()">📰 播報新聞</button>
     <button class="btn" id="musicBtn" onclick="toggleMusic()">🎵 播音樂</button>
   </div>
 
-  <!-- 加入隱藏的 audio 播放器（請自行放檔案到 /music） -->
+  <!-- 音樂播放器 -->
   <audio id="bgMusic" src="music/sample.mp3" loop></audio>
 
   <script>
-    // 時間
+    // ====== 時間 ======
     function pad(n){return n<10? '0'+n : n}
     function tick(){
       const now = new Date();
@@ -100,7 +100,7 @@
     }
     setInterval(tick, 1000); tick();
 
-    // 任務：固定兩項 + 每日再抽 1 項
+    // ====== 任務：固定兩項 + 每日再抽 1 項 ======
     const fixedTasks = ['去醫院復健（10:00）','圖書館書到期（今天或線上續借）'];
     const pool = ['喝水 6 杯','伸展 10 分鐘','看看昨天的照片 / 留言','去社區中庭走走 5 分鐘','水果一份（香蕉/蘋果）','打電話給朋友問候 5 分鐘'];
     function pickTasks(){
@@ -114,7 +114,7 @@
     }
     pickTasks();
 
-    // 早安圖：JS 陣列（不用 fetch），每次開啟隨機一張
+    // ====== 早安圖：隨機一張 ======
     const gmImages = [
       "images/goodmorning/1.jpg",
       "images/goodmorning/2.jpg",
@@ -132,8 +132,8 @@
       if (el) el.src = gmImages[idx];
     })();
 
-    // 相機
-    let currentFacing = 'user', currentStream = null, trackForTorch = null;
+    // ====== 相機背景（保留；如果不需要可以停用 startCamera()） ======
+    let currentFacing = 'user', currentStream = null;
     async function startCamera(){
       stopCamera();
       try {
@@ -144,62 +144,45 @@
         currentStream = stream;
         const video = document.getElementById('videoBg');
         video.srcObject = stream;
-        const [track] = stream.getVideoTracks();
-        trackForTorch = track;
       } catch (e) { console.warn('無法開啟相機：' + e.message); }
     }
-    function stopCamera(){ if (currentStream){ currentStream.getTracks().forEach(t=>t.stop()); currentStream=null; } trackForTorch=null; }
-    async function flipCam(){ currentFacing = (currentFacing === 'user') ? 'environment' : 'user'; await startCamera(); }
-    async function switchTorch(){
-      try {
-        if (!trackForTorch) return alert('裝置不支援或尚未啟用相機');
-        const capabilities = trackForTorch.getCapabilities?.();
-        if (capabilities && 'torch' in capabilities) {
-          const settings = trackForTorch.getSettings();
-          await trackForTorch.applyConstraints({ advanced: [{ torch: !settings.torch }] });
-        } else { alert('此瀏覽器不支援手電筒控制'); }
-      } catch (e) { alert('切換輔助燈失敗：' + e.message); }
-    }
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia){ startCamera(); } else { console.warn('此瀏覽器不支援相機存取'); }
-    window.addEventListener('beforeunload', stopCamera);
-    
-    // 嘗試挑選中文（台灣優先）
+    function stopCamera(){ if (currentStream){ currentStream.getTracks().forEach(t=>t.stop()); currentStream=null; } }
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia){ startCamera(); }
+
+    // ====== 語音：挑選中文（台灣優先） ======
     function pickZhTWVoice() {
       const vs = speechSynthesis.getVoices();
       return vs.find(v => /zh(-|_)TW/i.test(v.lang))
           || vs.find(v => /zh/i.test(v.lang))
           || vs[0];
     }
+    if ('speechSynthesis' in window) {
+      speechSynthesis.onvoiceschanged = () => { pickZhTWVoice(); };
+    }
 
-    // 可自動更新按鈕文字的播報器
-    function speak(text) {
-      if (!('speechSynthesis' in window)) { 
-        alert('此瀏覽器不支援語音播報'); 
-        return; 
-      }
+    // ====== 基礎 speak（會同步按鈕狀態） ======
+    function speak(text, btnId) {
+      if (!('speechSynthesis' in window)) { alert('此瀏覽器不支援語音播報'); return; }
       const u = new SpeechSynthesisUtterance(text);
       u.rate = 1; u.pitch = 1; u.volume = 1;
       const v = pickZhTWVoice(); 
       if (v) u.voice = v;
-
-      // 播放前清空佇列（避免重疊）
       speechSynthesis.cancel();
 
-      const resetSpeakBtn = () => {
-        const b = document.getElementById('speakBtn');
-        if (b) b.textContent = '🔊 語音播報';
+      const resetBtn = () => {
+        const b = document.getElementById(btnId);
+        if (b) b.textContent = (btnId === 'newsBtn') ? '📰 播報新聞' : '🔊 語音播報';
       };
-      u.onend = resetSpeakBtn;
-      u.oncancel = resetSpeakBtn;
-      u.onerror = resetSpeakBtn;
+      u.onend = resetBtn;
+      u.oncancel = resetBtn;
+      u.onerror = resetBtn;
 
-      const b = document.getElementById('speakBtn');
-      if (b) b.textContent = '⏸ 語音暫停';
-
+      const b = document.getElementById(btnId);
+      if (b) b.textContent = '⏸ 暫停播報';
       speechSynthesis.speak(u);
     }
 
-    // 蒐集頁面資訊並播報
+    // ====== 既有：今日摘要播報（toggle） ======
     function speakToday(){
       const date = document.getElementById('date')?.textContent || '';
       const heart = (document.getElementById('heartRate')?.textContent) || '心跳七十二';
@@ -207,10 +190,8 @@
       const temp  = (document.getElementById('temperature')?.textContent) || '體溫三十六點六度';
       const tasks = [...document.querySelectorAll('#taskList li')].map(li=>li.textContent.replace(/^•\s*/,'')).join('；');
       const msg = `早安！今天是 ${date}。${heart}，${bp}，${temp}。今日任務：${tasks}。加油！`;
-      speak(msg);
+      speak(msg, 'speakBtn');
     }
-
-    // 語音「按一下播放，再按一下暫停」
     function toggleSpeak(){
       if ('speechSynthesis' in window && (speechSynthesis.speaking || speechSynthesis.pending)) {
         speechSynthesis.cancel();
@@ -221,17 +202,72 @@
       speakToday();
     }
 
-    // 載入語音清單（有些瀏覽器需要）
-    if ('speechSynthesis' in window) {
-      speechSynthesis.onvoiceschanged = () => { pickZhTWVoice(); };
+    // ====== 新增：新聞與天氣 ======
+    async function fetchWeatherTaipei(){
+      try{
+        const url = 'https://api.open-meteo.com/v1/forecast?latitude=25.033&longitude=121.565&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FTaipei';
+        const r = await fetch(url);
+        const j = await r.json();
+        const cur = Math.round(j.current.temperature_2m);
+        const tmax = Math.round(j.daily.temperature_2m_max[0]);
+        const tmin = Math.round(j.daily.temperature_2m_min[0]);
+        return { cur, tmax, tmin };
+      }catch(e){
+        console.warn('weather error', e);
+        return null;
+      }
     }
 
-    // 音樂：按一下播放，再按一下暫停（含按鈕文字同步）
+    async function fetchTaiwanMarketNews(maxItems=3){
+      // 透過 AllOrigins 代理 Google News RSS，避免 CORS 問題
+      const rss = 'https://news.google.com/rss/search?q=%E5%8F%B0%E8%82%A1+OR+%E8%82%A1%E5%B8%82+OR+%E5%8F%B0%E7%81%A3+%E9%87%8D%E5%A4%A7+%E6%96%B0%E8%81%9E&hl=zh-TW&gl=TW&ceid=TW:zh-Hant';
+      const url = 'https://api.allorigins.win/get?url=' + encodeURIComponent(rss);
+      try{
+        const r = await fetch(url);
+        const j = await r.json();
+        const xml = j.contents;
+        const doc = new DOMParser().parseFromString(xml, 'text/xml');
+        const items = Array.from(doc.querySelectorAll('item')).slice(0, maxItems);
+        return items.map(it => it.querySelector('title')?.textContent.trim()).filter(Boolean);
+      }catch(e){
+        console.warn('news error', e);
+        // 後備標題
+        return ['台股盤勢更新','企業財報焦點','國際市場動向'];
+      }
+    }
+
+    async function newsSummary(){
+      const [w, titles] = await Promise.all([fetchWeatherTaipei(), fetchTaiwanMarketNews(3)]);
+      let parts = [];
+      if (w){ parts.push(`台北今天天氣：${w.tmax} 到 ${w.tmin} 度，目前約 ${w.cur} 度。`); }
+      if (titles && titles.length){
+        parts.push('股市重大新聞：' + titles.join('；') + '。');
+      } else {
+        parts.push('目前無法取得最新新聞。');
+      }
+      return parts.join('');
+    }
+
+    async function speakNews(){
+      const msg = await newsSummary();
+      speak(msg, 'newsBtn');
+    }
+
+    function toggleNews(){
+      if ('speechSynthesis' in window && (speechSynthesis.speaking || speechSynthesis.pending)) {
+        speechSynthesis.cancel();
+        const b = document.getElementById('newsBtn');
+        if (b) b.textContent = '📰 播報新聞';
+        return;
+      }
+      speakNews();
+    }
+
+    // ====== 音樂（toggle） ======
     function toggleMusic(){
       const audio = document.getElementById('bgMusic');
       const btn = document.getElementById('musicBtn');
       if (!audio) { alert('找不到音樂播放器'); return; }
-
       if (audio.paused){
         audio.play()
           .then(()=> { if (btn) btn.textContent = '⏸ 音樂暫停'; })
@@ -241,8 +277,6 @@
         if (btn) btn.textContent = '🎵 播音樂';
       }
     }
-
-    // 外部狀態變化時也同步按鈕文字
     (function bindMusicBtnState(){
       const audio = document.getElementById('bgMusic');
       const btn = document.getElementById('musicBtn');
