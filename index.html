@@ -81,13 +81,13 @@
   </section>
 
   <div class="floating">
-  <button class="btn" onclick="speakToday()">🔊 語音播報</button>
-  <button class="btn" onclick="flipCam()">🔁 切換鏡頭</button>
-  <button class="btn" onclick="toggleMusic()">🎵 播音樂</button>
+    <button class="btn" id="speakBtn" onclick="toggleSpeak()">🔊 語音播報</button>
+    <button class="btn" onclick="flipCam()">🔁 切換鏡頭</button>
+    <button class="btn" id="musicBtn" onclick="toggleMusic()">🎵 播音樂</button>
   </div>
 
-    <!-- 加入隱藏的 audio 播放器 -->
-    <audio id="bgMusic" src="music/sample.mp3" loop></audio>
+  <!-- 加入隱藏的 audio 播放器（請自行放檔案到 /music） -->
+  <audio id="bgMusic" src="music/sample.mp3" loop></audio>
 
   <script>
     // 時間
@@ -108,7 +108,7 @@
       let rnd = [...seed].reduce((a,c)=>a+c.charCodeAt(0),0);
       function rand(){ rnd = (rnd*9301 + 49297) % 233280; return rnd/233280; }
       const copy = pool.slice();
-      const i = Math.floor(rand()*copy.length);
+      const i = Math.floor(Math.random()*copy.length);
       const selected = copy.splice(i,1);
       document.getElementById('taskList').innerHTML = ['• '+fixedTasks[0],'• '+fixedTasks[1],'• '+selected[0]].map(t=>'<li>'+t+'</li>').join('');
     }
@@ -125,12 +125,11 @@
       "images/goodmorning/7.jpg",
       "images/goodmorning/8.jpg",
       "images/goodmorning/9.jpg"
-      // 之後新增圖片時，把檔名加在這裡，例如：
-      // ,"images/goodmorning/02.jpg","images/goodmorning/03.jpg"
     ];
     (function showRandomGM(){
       const idx = Math.floor(Math.random()*gmImages.length);
-      document.getElementById('gmImg').src = gmImages[idx];
+      const el = document.getElementById('gmImg');
+      if (el) el.src = gmImages[idx];
     })();
 
     // 相機
@@ -147,7 +146,7 @@
         video.srcObject = stream;
         const [track] = stream.getVideoTracks();
         trackForTorch = track;
-      } catch (e) { alert('無法開啟相機：' + e.message); }
+      } catch (e) { console.warn('無法開啟相機：' + e.message); }
     }
     function stopCamera(){ if (currentStream){ currentStream.getTracks().forEach(t=>t.stop()); currentStream=null; } trackForTorch=null; }
     async function flipCam(){ currentFacing = (currentFacing === 'user') ? 'environment' : 'user'; await startCamera(); }
@@ -161,54 +160,97 @@
         } else { alert('此瀏覽器不支援手電筒控制'); }
       } catch (e) { alert('切換輔助燈失敗：' + e.message); }
     }
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia){ startCamera(); } else { alert('此瀏覽器不支援相機存取'); }
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia){ startCamera(); } else { console.warn('此瀏覽器不支援相機存取'); }
     window.addEventListener('beforeunload', stopCamera);
     
-  // 嘗試挑選中文（台灣優先）
-  function pickZhTWVoice() {
-    const vs = speechSynthesis.getVoices();
-    return vs.find(v => /zh(-|_)TW/i.test(v.lang))
-        || vs.find(v => /zh/i.test(v.lang))
-        || vs[0];
-  }
-
-  function speak(text) {
-    if (!('speechSynthesis' in window)) { 
-      alert('此瀏覽器不支援語音播報'); 
-      return; 
+    // 嘗試挑選中文（台灣優先）
+    function pickZhTWVoice() {
+      const vs = speechSynthesis.getVoices();
+      return vs.find(v => /zh(-|_)TW/i.test(v.lang))
+          || vs.find(v => /zh/i.test(v.lang))
+          || vs[0];
     }
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1; u.pitch = 1; u.volume = 1;
-    const v = pickZhTWVoice(); 
-    if (v) u.voice = v;
-    speechSynthesis.cancel();
-    speechSynthesis.speak(u);
-  }
 
-  // 蒐集頁面資訊並播報
-  function speakToday(){
-    const date = document.getElementById('date')?.textContent || '';
-    const heart = (document.getElementById('heartRate')?.textContent) || '心跳七十二';
-    const bp    = (document.getElementById('bloodPressure')?.textContent) || '血壓一二五比七八';
-    const temp  = (document.getElementById('temperature')?.textContent) || '體溫三十六點六度';
-    const tasks = [...document.querySelectorAll('#taskList li')].map(li=>li.textContent.replace(/^•\s*/,'')).join('；');
-    const msg = `早安！今天是 ${date}。${heart}，${bp}，${temp}。今日任務：${tasks}。加油！`;
-    speak(msg);
-  }
+    // 可自動更新按鈕文字的播報器
+    function speak(text) {
+      if (!('speechSynthesis' in window)) { 
+        alert('此瀏覽器不支援語音播報'); 
+        return; 
+      }
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1; u.pitch = 1; u.volume = 1;
+      const v = pickZhTWVoice(); 
+      if (v) u.voice = v;
 
-  // 載入語音清單（有些瀏覽器需要）
-  if ('speechSynthesis' in window) {
-    speechSynthesis.onvoiceschanged = () => { pickZhTWVoice(); };
-  }
+      // 播放前清空佇列（避免重疊）
+      speechSynthesis.cancel();
 
-  function toggleMusic(){
-  const audio = document.getElementById('bgMusic');
-  if(audio.paused){
-    audio.play().catch(e => alert('無法播放音樂：' + e.message));
-  } else {
-    audio.pause();
-  }
+      const resetSpeakBtn = () => {
+        const b = document.getElementById('speakBtn');
+        if (b) b.textContent = '🔊 語音播報';
+      };
+      u.onend = resetSpeakBtn;
+      u.oncancel = resetSpeakBtn;
+      u.onerror = resetSpeakBtn;
+
+      const b = document.getElementById('speakBtn');
+      if (b) b.textContent = '⏸ 語音暫停';
+
+      speechSynthesis.speak(u);
     }
+
+    // 蒐集頁面資訊並播報
+    function speakToday(){
+      const date = document.getElementById('date')?.textContent || '';
+      const heart = (document.getElementById('heartRate')?.textContent) || '心跳七十二';
+      const bp    = (document.getElementById('bloodPressure')?.textContent) || '血壓一二五比七八';
+      const temp  = (document.getElementById('temperature')?.textContent) || '體溫三十六點六度';
+      const tasks = [...document.querySelectorAll('#taskList li')].map(li=>li.textContent.replace(/^•\s*/,'')).join('；');
+      const msg = `早安！今天是 ${date}。${heart}，${bp}，${temp}。今日任務：${tasks}。加油！`;
+      speak(msg);
+    }
+
+    // 語音「按一下播放，再按一下暫停」
+    function toggleSpeak(){
+      if ('speechSynthesis' in window && (speechSynthesis.speaking || speechSynthesis.pending)) {
+        speechSynthesis.cancel();
+        const b = document.getElementById('speakBtn');
+        if (b) b.textContent = '🔊 語音播報';
+        return;
+      }
+      speakToday();
+    }
+
+    // 載入語音清單（有些瀏覽器需要）
+    if ('speechSynthesis' in window) {
+      speechSynthesis.onvoiceschanged = () => { pickZhTWVoice(); };
+    }
+
+    // 音樂：按一下播放，再按一下暫停（含按鈕文字同步）
+    function toggleMusic(){
+      const audio = document.getElementById('bgMusic');
+      const btn = document.getElementById('musicBtn');
+      if (!audio) { alert('找不到音樂播放器'); return; }
+
+      if (audio.paused){
+        audio.play()
+          .then(()=> { if (btn) btn.textContent = '⏸ 音樂暫停'; })
+          .catch(e => alert('無法播放音樂：' + e.message));
+      } else {
+        audio.pause();
+        if (btn) btn.textContent = '🎵 播音樂';
+      }
+    }
+
+    // 外部狀態變化時也同步按鈕文字
+    (function bindMusicBtnState(){
+      const audio = document.getElementById('bgMusic');
+      const btn = document.getElementById('musicBtn');
+      if (!audio || !btn) return;
+      audio.addEventListener('play',  () => btn.textContent = '⏸ 音樂暫停');
+      audio.addEventListener('pause', () => btn.textContent = '🎵 播音樂');
+      audio.addEventListener('ended', () => btn.textContent = '🎵 播音樂');
+    })();
   </script>
   
 </body>
